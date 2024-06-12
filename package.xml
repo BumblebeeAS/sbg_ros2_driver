@@ -16,6 +16,7 @@
 
   <depend>geometry_msgs</depend>
   <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
@@ -25,6 +26,8 @@
   <depend>tf2_msgs</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>nmea_msgs</depend>
+  <depend>message_filters</depend>
+  <depend>geographic_msgs</depend>
 
   <exec_depend>rosidl_default_runtime</exec_depend>
 

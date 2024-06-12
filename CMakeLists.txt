@@ -3,6 +3,7 @@ project(sbg_driver)
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
@@ -15,6 +16,8 @@ find_package(tf2_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(nmea_msgs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
+find_package(message_filters REQUIRED)
+find_package(geographic_msgs REQUIRED)
 
 ################################################
 ## Declare ROS messages, services and actions ##
@@ -91,6 +94,7 @@ include_directories(
   ${PROJECT_SOURCE_DIR}/include/sbg_driver/
   ${PROJECT_SOURCE_DIR}/external/sbgECom/common
   ${PROJECT_SOURCE_DIR}/external/sbgECom/src
+  ${PROJECT_SOURCE_DIR}/include/
 )
 
 ## Define common resources.
@@ -121,27 +125,37 @@ else()
 target_compile_options(sbg_device_mag PRIVATE -Wall -Wextra)
 endif()
 
+add_library(sbg_converter SHARED src/sbg_converter.cpp)
+
 ## Specify libraries to link a library or executable target against
 target_link_libraries(sbg_device sbgECom)
 target_link_libraries(sbg_device_mag sbgECom)
 
 ament_target_dependencies(sbg_device ${USED_LIBRARIES}) 
 ament_target_dependencies(sbg_device_mag ${USED_LIBRARIES})
+ament_target_dependencies(sbg_converter rclcpp_components ${USED_LIBRARIES} message_filters geographic_msgs)
 
 rosidl_get_typesupport_target(cpp_typesupport_target "${PROJECT_NAME}" "rosidl_typesupport_cpp")
 target_link_libraries(sbg_device "${cpp_typesupport_target}")
 target_link_libraries(sbg_device_mag "${cpp_typesupport_target}")
+target_link_libraries(sbg_converter "${cpp_typesupport_target}")
 
 set_property(TARGET sbg_device PROPERTY CXX_STANDARD 14)
 set_property(TARGET sbg_device_mag PROPERTY CXX_STANDARD 14)
+set_property(TARGET sbg_converter PROPERTY CXX_STANDARD 14)
 
 #############
 ## Install ##
 #############
+rclcpp_components_register_node(sbg_converter
+  PLUGIN "SbgConverter" EXECUTABLE sbg_converter_node
+)
 
 ## Mark executables and/or libraries for installation
-install(TARGETS sbg_device sbg_device_mag
-   DESTINATION lib/${PROJECT_NAME}
+install(TARGETS sbg_device sbg_device_mag sbg_converter
+   ARCHIVE DESTINATION lib
+   LIBRARY DESTINATION lib
+   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
 ## Mark cpp header files for installation
