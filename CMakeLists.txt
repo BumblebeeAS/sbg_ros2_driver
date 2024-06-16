@@ -125,7 +125,7 @@ else()
 target_compile_options(sbg_device_mag PRIVATE -Wall -Wextra)
 endif()
 
-add_library(sbg_converter SHARED src/sbg_converter.cpp)
+add_library(sbg_converter SHARED src/sbg_converter.cpp src/custom_message_wrapper.cpp src/sbg_ros_helpers.cpp src/sbg_utm.cpp)
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(sbg_device sbgECom)
