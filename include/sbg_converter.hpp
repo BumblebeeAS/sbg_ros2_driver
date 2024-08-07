@@ -101,6 +101,7 @@ private:
     sbg_driver::msg::SbgEkfEuler::ConstSharedPtr sbg_ekf_euler_message_;
     bool enu_enable_, odom_publish_tf_, odom_invert_tf_;
     std::string odom_frame_id_, odom_base_frame_id_, odom_init_frame_id_;
+    double true_hdt_offset_;
 };
 
 #endif  // SBG_CONVERTER_HPP_

@@ -12,6 +12,8 @@ SbgConverter::SbgConverter(const rclcpp::NodeOptions &options)
   this->declare_parameter("odometry.odomFrameId", "odom_ned");
   this->declare_parameter("odometry.baseFrameId", "base_link_ned");
   this->declare_parameter("odometry.initFrameId", "map");
+  this->declare_parameter("odometry.true_hdt_offset", 0.0);
+
 
   this->get_parameter("sbg_namespace", sbg_namespace_);
   this->get_parameter("ros_namespace", ros_namespace_);
@@ -22,6 +24,7 @@ SbgConverter::SbgConverter(const rclcpp::NodeOptions &options)
   this->get_parameter("odometry.odomFrameId", odom_frame_id_);
   this->get_parameter("odometry.baseFrameId", odom_base_frame_id_);
   this->get_parameter("odometry.initFrameId", odom_init_frame_id_);
+  this->get_parameter("odometry.true_hdt_offset", true_hdt_offset_);
   message_wrapper_.setOdomPublishTf(odom_publish_tf_);
   message_wrapper_.setOdomInvertTf(odom_invert_tf_);
   message_wrapper_.setOdomBaseFrameId(odom_base_frame_id_);
@@ -152,17 +155,7 @@ void SbgConverter::publish_geo_pose() {
   geo_pose_msg.pose.pose.position.altitude = navsat_msg.altitude;
 
   bool is_heading_valid = false;
-  if (gps_hdt_ && gps_hdt_->true_heading_acc < 10.0 &&
-      gps_hdt_->pitch_acc < 10.0) {
-    std::cout << "heading: " << gps_hdt_->true_heading << std::endl;
-    tf2::Quaternion q;
-    q.setRPY(gps_hdt_->true_heading * M_PI / 180, gps_hdt_->pitch * M_PI / 180,
-             0);
-    geo_pose_msg.pose.pose.orientation = tf2::toMsg(q);
-    geo_pose_msg.pose.covariance[21] = 0;
-    geo_pose_msg.pose.covariance[28] = pow(gps_hdt_->pitch_acc, 2);
-    geo_pose_msg.pose.covariance[35] = pow(gps_hdt_->true_heading_acc, 2);
-  } else if (sbg_ekf_quat_message_->status.heading_valid == true &&
+  if (sbg_ekf_quat_message_->status.heading_valid == true &&
              sbg_ekf_quat_message_->accuracy.x < 0.1 &&
              sbg_ekf_quat_message_->accuracy.y < 0.1 &&
              sbg_ekf_quat_message_->accuracy.z < 0.1) {
@@ -170,6 +163,15 @@ void SbgConverter::publish_geo_pose() {
     geo_pose_msg.pose.covariance[21] = pow(sbg_ekf_quat_message_->accuracy.x, 2);
     geo_pose_msg.pose.covariance[28] = pow(sbg_ekf_quat_message_->accuracy.y, 2);
     geo_pose_msg.pose.covariance[35] = pow(sbg_ekf_quat_message_->accuracy.z, 2);
+  } else if (gps_hdt_ && gps_hdt_->true_heading_acc < 10.0 &&
+             gps_hdt_->pitch_acc < 10.0) {
+    std::cout << "heading: " << gps_hdt_->true_heading << std::endl;
+    tf2::Quaternion q;
+    q.setRPY(0.0, gps_hdt_->pitch * M_PI / 180, (gps_hdt_->true_heading + true_hdt_offset_) * M_PI / 180);
+    geo_pose_msg.pose.pose.orientation = tf2::toMsg(q);
+    geo_pose_msg.pose.covariance[21] = 0;
+    geo_pose_msg.pose.covariance[28] = pow(gps_hdt_->pitch_acc, 2);
+    geo_pose_msg.pose.covariance[35] = pow(gps_hdt_->true_heading_acc, 2);
   } else {
     geo_pose_msg.pose.pose.orientation = tf2::toMsg(tf2::Quaternion(0, 0, 0, 1));
     geo_pose_msg.pose.covariance[21] = pow(sbg_ekf_quat_message_->accuracy.x, 2);
