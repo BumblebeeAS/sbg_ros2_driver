@@ -155,24 +155,28 @@ void SbgConverter::publish_geo_pose() {
   geo_pose_msg.pose.pose.position.altitude = navsat_msg.altitude;
 
   bool is_heading_valid = false;
-  if (sbg_ekf_quat_message_->status.heading_valid == true &&
-             sbg_ekf_quat_message_->accuracy.x < 0.1 &&
-             sbg_ekf_quat_message_->accuracy.y < 0.1 &&
-             sbg_ekf_quat_message_->accuracy.z < 0.1) {
-    geo_pose_msg.pose.pose.orientation = sbg_ekf_quat_message_->quaternion;
-    geo_pose_msg.pose.covariance[21] = pow(sbg_ekf_quat_message_->accuracy.x, 2);
-    geo_pose_msg.pose.covariance[28] = pow(sbg_ekf_quat_message_->accuracy.y, 2);
-    geo_pose_msg.pose.covariance[35] = pow(sbg_ekf_quat_message_->accuracy.z, 2);
-  } else if (gps_hdt_ && gps_hdt_->true_heading_acc < 10.0 &&
+  if (gps_hdt_ && gps_hdt_->true_heading_acc < 10.0 &&
              gps_hdt_->pitch_acc < 10.0) {
     std::cout << "heading: " << gps_hdt_->true_heading << std::endl;
     tf2::Quaternion q;
     q.setRPY(0.0, gps_hdt_->pitch * M_PI / 180, (gps_hdt_->true_heading + true_hdt_offset_) * M_PI / 180);
+    RCLCPP_INFO(get_logger(), "using tr heading: %f", (gps_hdt_->true_heading + true_hdt_offset_) * M_PI / 180);
     geo_pose_msg.pose.pose.orientation = tf2::toMsg(q);
     geo_pose_msg.pose.covariance[21] = 0;
     geo_pose_msg.pose.covariance[28] = pow(gps_hdt_->pitch_acc, 2);
     geo_pose_msg.pose.covariance[35] = pow(gps_hdt_->true_heading_acc, 2);
-  } else {
+  } 
+  // else if (sbg_ekf_quat_message_->status.heading_valid == true &&
+  //            sbg_ekf_quat_message_->accuracy.x < 0.1 &&
+  //            sbg_ekf_quat_message_->accuracy.y < 0.1 &&
+  //            sbg_ekf_quat_message_->accuracy.z < 0.1) {
+  //   geo_pose_msg.pose.pose.orientation = sbg_ekf_quat_message_->quaternion;
+  //   geo_pose_msg.pose.covariance[21] = pow(sbg_ekf_quat_message_->accuracy.x, 2);
+  //   geo_pose_msg.pose.covariance[28] = pow(sbg_ekf_quat_message_->accuracy.y, 2);
+  //   geo_pose_msg.pose.covariance[35] = pow(sbg_ekf_quat_message_->accuracy.z, 2);
+  // } 
+  else {
+    RCLCPP_WARN(get_logger(), "no heading");
     geo_pose_msg.pose.pose.orientation = tf2::toMsg(tf2::Quaternion(0, 0, 0, 1));
     geo_pose_msg.pose.covariance[21] = pow(sbg_ekf_quat_message_->accuracy.x, 2);
     geo_pose_msg.pose.covariance[28] = pow(sbg_ekf_quat_message_->accuracy.y, 2);
@@ -192,7 +196,7 @@ void SbgConverter::publish_geo_pose() {
   ekf_geo_pose_msg.pose.pose.position.latitude = ekf_navsat_msg.latitude;
   ekf_geo_pose_msg.pose.pose.position.longitude = ekf_navsat_msg.longitude;
   ekf_geo_pose_msg.pose.pose.position.altitude = ekf_navsat_msg.altitude;
-  ekf_geo_pose_msg.pose.pose.orientation = sbg_ekf_quat_message_->quaternion;
+  ekf_geo_pose_msg.pose.pose.orientation = geo_pose_msg.pose.pose.orientation;
   ekf_geo_pose_msg.pose.covariance[0] = pow(sbg_ekf_nav_message_->position_accuracy.x, 2);
   ekf_geo_pose_msg.pose.covariance[7] = pow(sbg_ekf_nav_message_->position_accuracy.y, 2);
   ekf_geo_pose_msg.pose.covariance[14] = pow(sbg_ekf_nav_message_->position_accuracy.z, 2);
