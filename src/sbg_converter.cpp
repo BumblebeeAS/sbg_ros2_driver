@@ -160,7 +160,7 @@ void SbgConverter::publish_geo_pose() {
     std::cout << "heading: " << gps_hdt_->true_heading << std::endl;
     tf2::Quaternion q;
     q.setRPY(0.0, gps_hdt_->pitch * M_PI / 180, (gps_hdt_->true_heading + true_hdt_offset_) * M_PI / 180);
-    RCLCPP_INFO(get_logger(), "using tr heading: %f", (gps_hdt_->true_heading + true_hdt_offset_) * M_PI / 180);
+    // RCLCPP_INFO(get_logger(), "using tr heading: %f", (gps_hdt_->true_heading + true_hdt_offset_) * M_PI / 180);
     geo_pose_msg.pose.pose.orientation = tf2::toMsg(q);
     geo_pose_msg.pose.covariance[21] = 0;
     geo_pose_msg.pose.covariance[28] = pow(gps_hdt_->pitch_acc, 2);
