@@ -114,6 +114,7 @@ void MessagePublisher::initPublisher(rclcpp::Node& ref_ros_node_handle, SbgEComM
 
       case SBG_ECOM_LOG_UTC_TIME:
         sbg_utc_time_pub_ = ref_ros_node_handle.create_publisher<sbg_driver::msg::SbgUtcTime>(ref_output_topic, max_messages_);
+        utc_reference_pub_ = ref_ros_node_handle.create_publisher<sensor_msgs::msg::TimeReference>("imu/utc_ref", max_messages_);
         break;
 
       case SBG_ECOM_LOG_IMU_DATA:
@@ -280,14 +281,14 @@ void MessagePublisher::defineRosStandardPublishers(rclcpp::Node& ref_ros_node_ha
     RCLCPP_WARN(ref_ros_node_handle.get_logger(), "SBG_DRIVER - [Publisher] SBG Ekf data output are not configured, the standard ECEF position publisher can not be defined.");
   }
 
-  if (sbg_utc_time_pub_)
-  {
-    utc_reference_pub_ = ref_ros_node_handle.create_publisher<sensor_msgs::msg::TimeReference>("imu/utc_ref", max_messages_);
-  }
-  else
-  {
-    RCLCPP_WARN(ref_ros_node_handle.get_logger(), "SBG_DRIVER - [Publisher] SBG Utc data output are not configured, the UTC time reference publisher can not be defined.");
-  }
+  // if (sbg_utc_time_pub_)
+  // {
+  //   utc_reference_pub_ = ref_ros_node_handle.create_publisher<sensor_msgs::msg::TimeReference>("imu/utc_ref", max_messages_);
+  // }
+  // else
+  // {
+  //   RCLCPP_WARN(ref_ros_node_handle.get_logger(), "SBG_DRIVER - [Publisher] SBG Utc data output are not configured, the UTC time reference publisher can not be defined.");
+  // }
 
   if (sbg_gps_pos_pub_)
   {
