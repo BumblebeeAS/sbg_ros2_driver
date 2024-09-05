@@ -12,8 +12,6 @@ SbgConverter::SbgConverter(const rclcpp::NodeOptions &options)
   this->declare_parameter("odometry.odomFrameId", "odom_ned");
   this->declare_parameter("odometry.baseFrameId", "base_link_ned");
   this->declare_parameter("odometry.initFrameId", "map");
-  this->declare_parameter("odometry.true_hdt_offset", 0.0);
-
 
   this->get_parameter("sbg_namespace", sbg_namespace_);
   this->get_parameter("ros_namespace", ros_namespace_);
@@ -24,7 +22,6 @@ SbgConverter::SbgConverter(const rclcpp::NodeOptions &options)
   this->get_parameter("odometry.odomFrameId", odom_frame_id_);
   this->get_parameter("odometry.baseFrameId", odom_base_frame_id_);
   this->get_parameter("odometry.initFrameId", odom_init_frame_id_);
-  this->get_parameter("odometry.true_hdt_offset", true_hdt_offset_);
   message_wrapper_.setOdomPublishTf(odom_publish_tf_);
   message_wrapper_.setOdomInvertTf(odom_invert_tf_);
   message_wrapper_.setOdomBaseFrameId(odom_base_frame_id_);
@@ -55,9 +52,6 @@ SbgConverter::SbgConverter(const rclcpp::NodeOptions &options)
   }
   message_wrapper_.setFrameId(frame_id_);
 
-  gps_pos_publisher_ = this->create_publisher<
-      geographic_msgs::msg::GeoPoseWithCovarianceStamped>(
-      ros_namespace_ + "raw_geo_pose" + (enu_enable_? "" : "_ned"), 10);
   gps_navsat_publisher_ = this->create_publisher<sensor_msgs::msg::NavSatFix>(
       ros_namespace_ + "raw_navsat" + (enu_enable_? "" : "_ned"), 10);
   ekf_pos_publisher_ = this->create_publisher<
@@ -116,110 +110,69 @@ SbgConverter::SbgConverter(const rclcpp::NodeOptions &options)
 
   // imu_mag_sub_.subscribe(this, sbg_namespace_ + "mag", rmw_qos_profile);
   imu_sub_.subscribe(this, sbg_namespace_ + "imu_data", rmw_qos_profile);
-  sbg_ekf_quat_sub_.subscribe(this, sbg_namespace_ + "ekf_quat",
-                              rmw_qos_profile);
-
-  sync_ = std::make_shared<message_filters::TimeSynchronizer<
-      sbg_driver::msg::SbgEkfQuat, sbg_driver::msg::SbgImuData>>(
-      sbg_ekf_quat_sub_, imu_sub_, 10);
-  sync_->registerCallback(std::bind(&SbgConverter::imu_cb, this, _1, _2));
-
-  publish_timer_ =
-      this->create_wall_timer(std::chrono::milliseconds(100),
-                              std::bind(&SbgConverter::publish_geo_pose, this));
+  sbg_ekf_quat_sub_.subscribe(this, sbg_namespace_ + "ekf_quat", rmw_qos_profile);
 }
 
-void SbgConverter::publish_geo_pose() {
-  if (!sbg_ekf_quat_message_ || !sbg_ekf_nav_message_ || !gps_pos_) {
-    return;
+void SbgConverter::publish_ekf_geo_pose()
+{
+  if (gps_pos_)
+  {
+    auto navsat_msg = message_wrapper_.createRosNavSatFixMessage(gps_pos_);
+    gps_navsat_publisher_->publish(navsat_msg);
+
+    if (sbg_ekf_nav_message_ && sbg_ekf_nav_message_->status.position_valid)
+    {
+      auto ekf_navsat_msg =
+          message_wrapper_.createRosNavSatFixMessage(sbg_ekf_nav_message_, gps_pos_);
+      ekf_navsat_publisher_->publish(ekf_navsat_msg);
+      if (sbg_ekf_nav_message_->status.heading_valid)
+      {
+        if (sbg_ekf_quat_message_)
+        {
+          auto ekf_geo_pose_msg = geographic_msgs::msg::GeoPoseWithCovarianceStamped();
+          ekf_geo_pose_msg.header = navsat_msg.header;
+          ekf_geo_pose_msg.pose.pose.position.latitude = ekf_navsat_msg.latitude;
+          ekf_geo_pose_msg.pose.pose.position.longitude = ekf_navsat_msg.longitude;
+          ekf_geo_pose_msg.pose.pose.position.altitude = ekf_navsat_msg.altitude;
+          ekf_geo_pose_msg.pose.covariance[0] =
+              pow(sbg_ekf_nav_message_->position_accuracy.x, 2);
+          ekf_geo_pose_msg.pose.covariance[7] =
+              pow(sbg_ekf_nav_message_->position_accuracy.y, 2);
+          ekf_geo_pose_msg.pose.covariance[14] =
+              pow(sbg_ekf_nav_message_->position_accuracy.z, 2);
+
+          ekf_geo_pose_msg.pose.pose.orientation = sbg_ekf_quat_message_->quaternion;
+          ekf_geo_pose_msg.pose.covariance[21] =
+              pow(sbg_ekf_quat_message_->accuracy.x, 2);
+          ekf_geo_pose_msg.pose.covariance[28] =
+              pow(sbg_ekf_quat_message_->accuracy.y, 2);
+          ekf_geo_pose_msg.pose.covariance[35] =
+              pow(sbg_ekf_quat_message_->accuracy.z, 2);
+          ekf_pos_publisher_->publish(ekf_geo_pose_msg);
+        }
+      }
+    }
   }
-  // navsat_msg.header = sbg_ekf_nav_message_->header;
-  // navsat_msg.header.frame_id = ros_namespace_ + "raw/nav_sat_fix";
-
-  // navsat_msg.latitude = gps_pos_->latitude;
-  // navsat_msg.longitude = gps_pos_->longitude;
-  // navsat_msg.altitude = gps_pos_->altitude;
-  // navsat_msg.position_covariance[0] = gps_pos_->position_accuracy.x;
-  // navsat_msg.position_covariance[4] = gps_pos_->position_accuracy.y;
-  // navsat_msg.position_covariance[8] = gps_pos_->position_accuracy.z;
-  // navsat_msg.position_covariance_type =
-  //     sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_DIAGONAL_KNOWN;
-  auto navsat_msg = message_wrapper_.createRosNavSatFixMessage(gps_pos_);
-  gps_navsat_publisher_->publish(navsat_msg);
-
-  auto geo_pose_msg = geographic_msgs::msg::GeoPoseWithCovarianceStamped();
-  geo_pose_msg.header = navsat_msg.header;
-  // geo_pose_msg.header.frame_id = ros_namespace_ + "imu" + (enu_enable_ ? "" : "_ned");
-  geo_pose_msg.pose.pose.position.latitude = navsat_msg.latitude;
-  geo_pose_msg.pose.pose.position.longitude = navsat_msg.longitude;
-  geo_pose_msg.pose.pose.position.altitude = navsat_msg.altitude;
-
-  bool is_heading_valid = false;
-  if (gps_hdt_ && gps_hdt_->true_heading_acc < 10.0 &&
-             gps_hdt_->pitch_acc < 10.0) {
-    std::cout << "heading: " << gps_hdt_->true_heading << std::endl;
-    tf2::Quaternion q;
-    q.setRPY(0.0, gps_hdt_->pitch * M_PI / 180, (gps_hdt_->true_heading + true_hdt_offset_) * M_PI / 180);
-    // RCLCPP_INFO(get_logger(), "using tr heading: %f", (gps_hdt_->true_heading + true_hdt_offset_) * M_PI / 180);
-    geo_pose_msg.pose.pose.orientation = tf2::toMsg(q);
-    geo_pose_msg.pose.covariance[21] = 0;
-    geo_pose_msg.pose.covariance[28] = pow(gps_hdt_->pitch_acc, 2);
-    geo_pose_msg.pose.covariance[35] = pow(gps_hdt_->true_heading_acc, 2);
-  } 
-  // else if (sbg_ekf_quat_message_->status.heading_valid == true &&
-  //            sbg_ekf_quat_message_->accuracy.x < 0.1 &&
-  //            sbg_ekf_quat_message_->accuracy.y < 0.1 &&
-  //            sbg_ekf_quat_message_->accuracy.z < 0.1) {
-  //   geo_pose_msg.pose.pose.orientation = sbg_ekf_quat_message_->quaternion;
-  //   geo_pose_msg.pose.covariance[21] = pow(sbg_ekf_quat_message_->accuracy.x, 2);
-  //   geo_pose_msg.pose.covariance[28] = pow(sbg_ekf_quat_message_->accuracy.y, 2);
-  //   geo_pose_msg.pose.covariance[35] = pow(sbg_ekf_quat_message_->accuracy.z, 2);
-  // } 
-  else {
-    RCLCPP_WARN(get_logger(), "no heading");
-    geo_pose_msg.pose.pose.orientation = tf2::toMsg(tf2::Quaternion(0, 0, 0, 1));
-    geo_pose_msg.pose.covariance[21] = pow(sbg_ekf_quat_message_->accuracy.x, 2);
-    geo_pose_msg.pose.covariance[28] = pow(sbg_ekf_quat_message_->accuracy.y, 2);
-    geo_pose_msg.pose.covariance[35] = pow(sbg_ekf_quat_message_->accuracy.z, 2);
-  }
-  geo_pose_msg.pose.covariance[0] = pow(gps_pos_->position_accuracy.x, 2);
-  geo_pose_msg.pose.covariance[7] = pow(gps_pos_->position_accuracy.y, 2);
-  geo_pose_msg.pose.covariance[14] = pow(gps_pos_->position_accuracy.z, 2);
-  gps_pos_publisher_->publish(geo_pose_msg);
-
-  auto ekf_navsat_msg = message_wrapper_.createRosNavSatFixMessage(
-    sbg_ekf_nav_message_, gps_pos_);
-  ekf_navsat_publisher_->publish(ekf_navsat_msg);
-
-  auto ekf_geo_pose_msg = geographic_msgs::msg::GeoPoseWithCovarianceStamped();
-  ekf_geo_pose_msg.header = ekf_navsat_msg.header;
-  ekf_geo_pose_msg.pose.pose.position.latitude = ekf_navsat_msg.latitude;
-  ekf_geo_pose_msg.pose.pose.position.longitude = ekf_navsat_msg.longitude;
-  ekf_geo_pose_msg.pose.pose.position.altitude = ekf_navsat_msg.altitude;
-  ekf_geo_pose_msg.pose.pose.orientation = geo_pose_msg.pose.pose.orientation;
-  ekf_geo_pose_msg.pose.covariance[0] = pow(sbg_ekf_nav_message_->position_accuracy.x, 2);
-  ekf_geo_pose_msg.pose.covariance[7] = pow(sbg_ekf_nav_message_->position_accuracy.y, 2);
-  ekf_geo_pose_msg.pose.covariance[14] = pow(sbg_ekf_nav_message_->position_accuracy.z, 2);
-  ekf_geo_pose_msg.pose.covariance[21] = pow(sbg_ekf_quat_message_->accuracy.x, 2);
-  ekf_geo_pose_msg.pose.covariance[28] = pow(sbg_ekf_quat_message_->accuracy.y, 2);
-  ekf_geo_pose_msg.pose.covariance[35] = pow(sbg_ekf_quat_message_->accuracy.z, 2);
-  ekf_pos_publisher_->publish(ekf_geo_pose_msg);
 }
 
-void SbgConverter::ekf_nav_cb(const sbg_driver::msg::SbgEkfNav::ConstSharedPtr msg) {
+void SbgConverter::ekf_nav_cb(const sbg_driver::msg::SbgEkfNav::ConstSharedPtr msg)
+{
   sbg_ekf_nav_message_ = msg;
+  publish_ekf_geo_pose();
+  processRosOdoMessage();
+  processRosVelMessage();
 }
 
 void SbgConverter::ekf_euler_cb(const sbg_driver::msg::SbgEkfEuler::ConstSharedPtr msg) {
   sbg_ekf_euler_message_ = msg;
     // processRosVelMessage();
-    processRosOdoMessage();
+    // processRosOdoMessage();
 }
 
 void SbgConverter::ekf_quat_cb(const sbg_driver::msg::SbgEkfQuat::ConstSharedPtr msg) {
   sbg_ekf_quat_message_ = msg;
   processRosImuMessage();
-  processRosVelMessage();
+  // processRosVelMessage();
 }
 
 void SbgConverter::gps_pos_cb(const sbg_driver::msg::SbgGpsPos::ConstSharedPtr msg) {
@@ -237,7 +190,7 @@ void SbgConverter::mag_cb(const sbg_driver::msg::SbgMag::ConstSharedPtr msg) {
 void SbgConverter::imu_cb(
     const sbg_driver::msg::SbgEkfQuat::ConstSharedPtr &quat,
     const sbg_driver::msg::SbgImuData::ConstSharedPtr &msg) {
-  publish_geo_pose();
+  publish_ekf_geo_pose();
 }
 
 void SbgConverter::utc_time_cb(sbg_driver::msg::SbgUtcTime::ConstSharedPtr msg) {
@@ -254,7 +207,7 @@ void SbgConverter::imu_data_cb(sbg_driver::msg::SbgImuData::ConstSharedPtr msg) 
   }
   sbg_imu_message_ = msg;
   processRosImuMessage();
-  processRosVelMessage();
+  // processRosVelMessage();
   // processRosOdoMessage();
 }
 

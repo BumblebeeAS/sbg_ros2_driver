@@ -501,6 +501,7 @@ const sensor_msgs::msg::NavSatFix CustomMessageWrapper::createRosNavSatFixMessag
   sbg_driver::msg::SbgGpsPos::ConstSharedPtr ref_sbg_gps_msg) const
 {
   sensor_msgs::msg::NavSatFix nav_sat_fix_message;
+  nav_sat_fix_message.header = createRosHeader(ref_sbg_gps_msg->time_stamp);
 
   if (ref_sbg_gps_msg->status.type == SBG_ECOM_GNSS_POS_TYPE_NO_SOLUTION)
   {
