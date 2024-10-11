@@ -69,7 +69,7 @@ private:
       gps_pos_publisher_;
   rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr gps_navsat_publisher_;
   rclcpp::Publisher<geographic_msgs::msg::GeoPoseWithCovarianceStamped>::SharedPtr
-      ekf_pos_publisher_;
+      ekf_pos_publisher_, raw_pos_publisher_;
   rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr ekf_navsat_publisher_;
   rclcpp::Publisher<sensor_msgs::msg::Imu>::SharedPtr imu_pub_;
   rclcpp::Publisher<sensor_msgs::msg::TimeReference>::SharedPtr utc_reference_pub_;

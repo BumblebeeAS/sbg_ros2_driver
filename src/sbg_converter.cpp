@@ -57,6 +57,9 @@ SbgConverter::SbgConverter(const rclcpp::NodeOptions &options)
   ekf_pos_publisher_ = this->create_publisher<
       geographic_msgs::msg::GeoPoseWithCovarianceStamped>(
       ros_namespace_ + "ekf_geo_pose" + (enu_enable_? "" : "_ned"), 10);
+  raw_pos_publisher_ = this->create_publisher<
+      geographic_msgs::msg::GeoPoseWithCovarianceStamped>(
+      ros_namespace_ + "raw_geo_pose" + (enu_enable_? "" : "_ned"), 10);
   ekf_navsat_publisher_ = this->create_publisher<sensor_msgs::msg::NavSatFix>(
       ros_namespace_ + "ekf_navsat" + (enu_enable_? "" : "_ned"), 10);
   imu_pub_ =
@@ -119,6 +122,19 @@ void SbgConverter::publish_ekf_geo_pose()
   {
     auto navsat_msg = message_wrapper_.createRosNavSatFixMessage(gps_pos_);
     gps_navsat_publisher_->publish(navsat_msg);
+
+    if (gps_pos_->status.position_valid)
+    {
+      auto raw_geo_pose_msg = geographic_msgs::msg::GeoPoseWithCovarianceStamped();
+      raw_geo_pose_msg.header = navsat_msg.header;
+      raw_geo_pose_msg.pose.pose.position.latitude = navsat_msg.latitude;
+      raw_geo_pose_msg.pose.pose.position.longitude = navsat_msg.longitude;
+      raw_geo_pose_msg.pose.pose.position.altitude = navsat_msg.altitude;
+      raw_geo_pose_msg.pose.covariance[0] = pow(gps_pos_->position_accuracy.x, 2);
+      raw_geo_pose_msg.pose.covariance[7] = pow(gps_pos_->position_accuracy.y, 2);
+      raw_geo_pose_msg.pose.covariance[14] = pow(gps_pos_->position_accuracy.z, 2);
+      raw_pos_publisher_->publish(raw_geo_pose_msg);
+    }
 
     if (sbg_ekf_nav_message_ && sbg_ekf_nav_message_->status.position_valid)
     {
