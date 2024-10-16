@@ -123,7 +123,7 @@ void SbgConverter::publish_ekf_geo_pose()
     auto navsat_msg = message_wrapper_.createRosNavSatFixMessage(gps_pos_);
     gps_navsat_publisher_->publish(navsat_msg);
 
-    if (gps_pos_->status.position_valid)
+    if (gps_pos_->status.status == 0)
     {
       auto raw_geo_pose_msg = geographic_msgs::msg::GeoPoseWithCovarianceStamped();
       raw_geo_pose_msg.header = navsat_msg.header;
